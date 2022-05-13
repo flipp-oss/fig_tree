@@ -188,6 +188,18 @@ FileCreator.user_read = true
 # config.user_read is deprecated - use config.file_options.user_read
 ```
 
+## Testing
+
+You can use the `with_config` method to test your code with specific config values that get 
+reset after the block is done executing:
+
+```ruby
+FileCreator.with_config('file_options.group_name' => 'root') do
+  # test this code
+end
+# file_options.group_name will be set back to the original value afterwards
+```
+
 ## Contributing
 
 Bug reports and pull requests are welcome on GitHub at https://github.com/flipp-oss/fig_tree .
