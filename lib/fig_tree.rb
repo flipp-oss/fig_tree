@@ -241,6 +241,34 @@ module FigTree
       @config ||= ConfigStruct.new('config')
     end
 
+    # Evaluate a block with the given configuration values. Reset back to the original values
+    # when done.
+    # @param values [Hash]
+    def with_config(**values, &block) # rubocop:disable Metrics/AbcSize
+      set_value = lambda do |k, v|
+        obj = self.config
+        tokens = k.split('.')
+        tokens[0..-2].each do |token|
+          obj = obj.send(token)
+        end
+        obj.send(:"#{tokens.last}=", v)
+      end
+
+      get_value = lambda do |k|
+        obj = self.config
+        tokens = k.split('.')
+        tokens.each do |token|
+          obj = obj.send(token)
+        end
+        obj
+      end
+
+      old_values = values.keys.map { |k| [k, get_value.call(k)] }.to_h
+      values.each { |k, v| set_value.call(k, v) }
+      block.call
+      old_values.each { |k, v| set_value.call(k, v) }
+    end
+
     # Pass a block to run after configuration is done.
     def after_configure(&block)
       mod = self
