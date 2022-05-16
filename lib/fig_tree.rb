@@ -244,7 +244,7 @@ module FigTree
     # Evaluate a block with the given configuration values. Reset back to the original values
     # when done.
     # @param values [Hash]
-    def with_config(**values, &block) # rubocop:disable Metrics/AbcSize
+    def with_config(values={}, &block) # rubocop:disable Metrics/AbcSize
       set_value = lambda do |k, v|
         obj = self.config
         tokens = k.split('.')
