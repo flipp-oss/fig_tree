@@ -7,6 +7,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## UNRELEASED
 
+## [0.0.5] - 2023-04-04
+- Remove Deimos-specific Rake Task skip
+
 ## [0.0.4] - 2022-05-16
 - Added `with_config` method for testing.
 
