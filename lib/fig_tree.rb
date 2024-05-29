@@ -9,14 +9,19 @@ require 'active_support/callbacks'
 
 # Configuration module.
 module FigTree
+
+  class << self
+    attr_accessor :keep_removed_configs
+  end
+
   extend ActiveSupport::Concern
 
-  ConfigValue = Struct.new(:value, :default_value, :default_proc, :deprecation) do
+  ConfigValue = Struct.new(:value, :default_value, :default_proc, :deprecation, :removed) do
 
     # Reset value back to default.
-    def reset!
+    def reset_values
       if self.value.is_a?(ConfigStruct)
-        self.value.reset!
+        self.value.reset_values
       else
         self.value = self.default_value
       end
@@ -24,10 +29,17 @@ module FigTree
 
     # :nodoc:
     def clone_and_reset
-      setting = ConfigValue.new(self.value, self.default_value,
+      val = self.value.respond_to?(:clone_and_reset) ? self.value.clone_and_reset : self.value
+      setting = ConfigValue.new(val, self.default_value,
                                 self.default_proc, self.deprecation)
-      setting.reset!
+      setting.reset_values
       setting
+    end
+
+    # @return [Boolean]
+    def default_value?
+      val = self.default_proc ? self.default_proc.call : self.default_value
+      val == self.value
     end
 
   end
@@ -46,10 +58,15 @@ module FigTree
       @setting_templates = {}
     end
 
+    def reset_values
+      @setting_objects = @setting_templates.map { |k, _| [k, []] }.to_h
+      @settings.values.each(&:reset_values)
+    end
+
     # Reset config back to default values.
     def reset!
-      @setting_objects = @setting_templates.map { |k, _| [k, []] }.to_h
-      @settings.values.each(&:reset!)
+      reset_values
+      run_callbacks(:configure)
     end
 
     # Mark a configuration as deprecated and replaced with the new config.
@@ -70,6 +87,20 @@ module FigTree
       @settings.map { |k, v| [k, v.value] }.to_h
     end
 
+    def clear_removed_fields!
+      return if FigTree.keep_removed_configs
+
+      @settings.delete_if.each do |setting|
+        if setting.value.is_a?(ConfigStruct)
+          setting.value.clear_removed_fields!
+          false
+        else
+          setting.removed
+        end
+      end
+      @setting_objects.values.flatten.each(&:clear_removed_fields!)
+    end
+
     # :nodoc:
     def clone_and_reset
       new_config = self.clone
@@ -88,16 +119,16 @@ module FigTree
     # @param name [Symbol]
     def setting_object(name, &block)
       new_config = ConfigStruct.new("#{@name}.#{name}")
-      @setting_objects[name] = []
-      @setting_templates[name] = new_config
-      new_config.instance_eval(&block)
+      @setting_objects[name] ||= []
+      @setting_templates[name] ||= new_config
+      @setting_templates[name].instance_eval(&block)
     end
 
     # Define a setting with the given name.
     # @param name [Symbol]
     # @param default_value [Object]
     # @param default_proc [Proc]
-    def setting(name, default_value=nil, default_proc: nil, &block)
+    def setting(name, default_value=nil, default_proc: nil, removed: false, &block)
       if block_given?
         # Create a nested setting
         setting_config = @settings[name]&.value || ConfigStruct.new("#{@name}.#{name}")
@@ -109,8 +140,34 @@ module FigTree
         setting = ConfigValue.new
         setting.default_proc = default_proc
         setting.default_value = default_value
-        setting.reset!
+        setting.reset_values
+        setting.removed = removed
         @settings[name] = setting
+      end
+    end
+
+    # @param field [String]
+    # @return [Boolean]
+    def default_value?(field)
+      @settings[field].default_value?
+    end
+
+    # Cuts down the config to only values that don't match the default values.
+    # Used to generate a representation of current config only via the changes.
+    def non_default_settings!
+      @settings.delete_if do |key, setting|
+        if setting.value.is_a?(ConfigStruct)
+          setting.value.non_default_settings!
+          setting.value.settings.empty?
+        else
+          setting.default_value?
+        end
+      end
+      @setting_objects.each do |_, list|
+        list.select! do |setting|
+          setting.non_default_settings!
+          setting.settings.none?
+        end
       end
     end
 
@@ -138,6 +195,10 @@ module FigTree
       end
 
       setting = @settings[config_key]
+
+      if setting&.removed && !FigTree.keep_removed_configs
+        puts "[Config] #{config_key} has been removed: #{setting.removed}"
+      end
 
       if setting&.deprecation
         return _deprecated_config_method(method, *args)
@@ -267,6 +328,7 @@ module FigTree
       mod = self
       config.class.set_callback(:configure, :after,
                                 proc { mod.instance_eval(&block) })
+      config.clear_removed_fields!
     end
   end
 end
