@@ -7,6 +7,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## UNRELEASED
 
+## [0.2.0] - 2024-05-31
+- Add `removed` and `keep_removed_configs`
+- Add `trap_config`
+
 ## [0.0.6] - 2023-08-29
 - Add RBI files and DSL compiler for Sorbet
 
