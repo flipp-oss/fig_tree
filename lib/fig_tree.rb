@@ -213,6 +213,14 @@ module FigTree
       _default_config_method(config_key, *args)
     end
 
+    def trap_config(&block)
+      old_settings = @settings.deep_dup
+      old_setting_objects = @setting_objects.deep_dup
+      block.call
+      @settings = old_settings
+      @setting_objects = old_setting_objects
+    end
+
   protected
 
     # Only for the clone method
@@ -293,6 +301,10 @@ module FigTree
     # @return [ConfigStruct]
     def config
       @config ||= ConfigStruct.new('config')
+    end
+
+    def trap_config(&block)
+      config.trap_config(&block)
     end
 
     # Evaluate a block with the given configuration values. Reset back to the original values
